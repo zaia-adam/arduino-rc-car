@@ -1,0 +1,265 @@
+#define IR_SMALLD_NEC
+
+
+#include <IRsmallDecoder.h>
+irSmallD_t irData;
+
+
+IRsmallDecoder irDecoder(3);
+
+
+//Variable Initiation
+float input;
+bool lightOn = false;
+
+
+//Motor 1
+int motor1Pos = 10;
+int motor1Neg = 11;
+
+
+//Motor 2
+int motor2Pos = 6;
+int motor2Neg = 5;
+
+
+//Motor 3
+int waterPumpPos = 12;
+int waterPumpNeg = 13;
+bool pumpOn = false;
+int motorState;
+int turnState = 0; //-1 is turning left, 1 is turning right, 0 is no turning
+
+
+//Movement variables based on IR Remote
+int up = 9;
+int down = 7;
+int right = 67;
+int left = 68;
+
+
+//Distance Sensor Variables
+int trig = 9;
+int echo = 8;
+float distance, duration;
+
+
+//Movement Functions
+  //Motor One (Left)
+void motor1Forward(){
+  analogWrite(motor1Pos, 0);
+  analogWrite(motor1Neg, 150);
+}
+void motor1ForwardFull(){
+  analogWrite(motor1Pos, 0);
+  analogWrite(motor1Neg, 255);
+}
+void motor1Reverse() {
+  analogWrite(motor1Pos, 150);
+  analogWrite(motor1Neg, 0);
+}
+void motor1Stop() {
+  digitalWrite(motor1Pos, LOW);
+  digitalWrite(motor1Neg, LOW);
+}
+
+
+  //Motor Two (Right)
+void motor2Forward() {
+  analogWrite(motor2Pos, 0);
+  analogWrite(motor2Neg, 150);
+}
+void motor2ForwardFull() {
+  analogWrite(motor2Pos, 0);
+  analogWrite(motor2Neg, 255);
+}
+void motor2Reverse() {
+  analogWrite(motor2Pos, 150);
+  analogWrite(motor2Neg, 0);
+}
+void motor2Stop() {
+  digitalWrite(motor2Pos, LOW);
+  digitalWrite(motor2Neg, LOW);
+}
+
+
+//Combinations
+void turnLeft(){
+  analogWrite(motor1Pos, 0);
+  analogWrite(motor1Neg, 75);
+  motor2ForwardFull();
+  delay(1000);
+  motor2Forward();
+}
+
+
+void turnRight(){
+  motor1ForwardFull();
+  analogWrite(motor2Pos, 0);
+  analogWrite(motor2Neg, 75);
+  delay(1000);
+  motor1Forward();
+}
+
+
+void moveForward(){
+  motor1Forward();
+  motor2Forward();
+}
+
+
+void moveBackwards(){
+  motor1Reverse();
+  motor2Reverse();
+}
+
+
+void stop(){
+  motor1Stop();
+  motor2Stop();
+}
+
+
+//Water Pump
+void pumpTurnOn(){
+  analogWrite(waterPumpPos, 255);
+  analogWrite(waterPumpNeg, 0);
+}
+
+
+void pumpTurnOff(){
+  digitalWrite(waterPumpPos, LOW);
+  digitalWrite(waterPumpNeg, LOW);
+}
+
+
+void setup()
+{
+  Serial.begin(9600);
+  pinMode(motor1Pos, OUTPUT);
+  pinMode(motor1Neg, OUTPUT);
+  pinMode(motor2Pos, OUTPUT);
+  pinMode(motor2Neg, OUTPUT);
+  pinMode(waterPumpPos, OUTPUT);
+  pinMode(waterPumpNeg, OUTPUT);
+  pinMode(2, INPUT);
+  pinMode(trig, OUTPUT);
+  pinMode(echo, INPUT);
+}
+
+
+void loop()
+{
+  //Distance sensor
+  digitalWrite(trig,HIGH);
+  delayMicroseconds(50);
+  digitalWrite(trig, LOW);
+  duration = pulseIn(echo, HIGH);
+  distance = duration/147;
+ if(irDecoder.dataAvailable(irData)) {
+   //Receives and stores input from the IR controller
+   int irReceived = irData.cmd;
+   Serial.println(irReceived);
+   //turns on LED light, representing that the circuit is "activated." LED is not required
+   if(irReceived == 69 && lightOn == false){
+     lightOn = true;
+   } else if(irReceived == 69 && lightOn == true){
+     lightOn = false;
+     motor1Stop();
+     motor2Stop();
+     motorState = 0;
+     turnState = 0;
+   }
+
+
+
+
+   //Motor Controls from remote
+   if(lightOn == true){
+     //Forwards and reverse
+     if(irReceived == up && motorState == -1){
+       stop();
+       motorState = 0;
+       turnState = 0;
+     } else if(irReceived == down && motorState == 1){
+       stop();
+       motorState = 0;
+       turnState = 0;
+     } else if(irReceived == up){
+       moveForward();
+       motorState = 1;
+       turnState = 0;
+     } else if(irReceived == down){
+       moveBackwards();
+       motorState = -1;
+       turnState = 0;
+     } else {
+
+
+     //turning left and right
+
+
+     if(turnState == 0){
+       if(irReceived == left){
+         turnLeft();
+         turnState = -1;
+       } else if(irReceived == right){
+           turnRight();
+           turnState = 1;
+       }
+     } else if(turnState == 1){ //Turning Right
+         if(irReceived == left){
+           if(motorState == 1 ){
+             moveForward();
+             turnState = 0;
+           } else if(motorState == 0){
+             stop();
+             turnState = 0;
+           } else if (motorState = -1){
+             moveBackwards();
+             turnState = 0;
+           }
+         }
+     }else if(turnState == -1){ //Turning Left
+       if(irReceived == right){
+           if(motorState == 1 ){
+             moveForward();
+             turnState = 0;
+           } else if(motorState == 0){
+             stop();
+             turnState = 0;
+           } else if (motorState == -1){
+             moveBackwards();
+             turnState = 0;
+           }
+         }
+     }
+     //Water Pump
+     if(irReceived == 71 && pumpOn == false){
+       pumpTurnOn();
+       pumpOn = true;
+       delay(2500);
+       pumpTurnOff();
+       pumpOn = false;
+     }
+     }
+   }
+    Serial.println(motorState);
+ }
+  if(distance < 5 && motorState == 1){
+    stop();
+    motorState = 0;
+    turnState = 0;
+  }
+}
+
+
+
+
+
+
+
+
+
+
+
